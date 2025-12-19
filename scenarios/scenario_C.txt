@@ -1,0 +1,24 @@
+{
+  "id": "scenario_C",
+  "name": "Appointment Cancellation",
+  "description": "Patient wants to cancel their appointment for next week",
+  "patient_message": "Please cancel my appointment for next week.",
+  "patient_id": "P003",
+  "patient_name": "Carol Johnson",
+  "expected_status": "cancelled",
+  "expected_response_keywords": ["cancel", "appointment", "cancelled", "reschedule", "different time"],
+  "setup_data": {
+    "ensure_appointment_exists": {
+      "patient_id": "P003",
+      "datetime": "2025-12-18T09:00:00",
+      "type": "regular_checkup",
+      "status": "scheduled"
+    }
+  },
+  "success_criteria": {
+    "response_contains_keywords": true,
+    "schedule_update_status": "cancelled",
+    "offers_reschedule_option": true,
+    "appointment_datetime_matches": "2025-12-18T09:00:00"
+  }
+}

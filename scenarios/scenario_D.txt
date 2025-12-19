@@ -1,0 +1,20 @@
+{
+  "id": "scenario_D",
+  "name": "New Patient Scheduling",
+  "description": "New patient wants to schedule their first appointment",
+  "patient_message": "I'm a new patient and I'd like to schedule a consultation.",
+  "patient_name": "Frank Miller",
+  "expected_status": "pending",
+  "expected_response_keywords": ["new patient", "consultation", "schedule", "available", "dates"],
+  "setup_data": {
+    "ensure_patient_not_exists": {
+      "name": "Frank Miller"
+    }
+  },
+  "success_criteria": {
+    "response_contains_keywords": true,
+    "schedule_update_status": "pending",
+    "asks_for_preferences": true,
+    "mentions_consultation_duration": true
+  }
+}

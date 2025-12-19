@@ -1,0 +1,54 @@
+{
+  "clinic_hours": {
+    "monday": { "open": "08:00", "close": "17:00" },
+    "tuesday": { "open": "08:00", "close": "17:00" },
+    "wednesday": { "open": "08:00", "close": "17:00" },
+    "thursday": { "open": "08:00", "close": "17:00" },
+    "friday": { "open": "08:00", "close": "17:00" },
+    "saturday": { "open": "09:00", "close": "13:00" },
+    "sunday": { "open": "closed", "close": "closed" }
+  },
+  "appointment_types": {
+    "regular_checkup": { "duration": 60, "description": "Routine cleaning and examination" },
+    "initial_consultation": { "duration": 90, "description": "New patient consultation with x-rays" },
+    "follow_up": { "duration": 45, "description": "Follow-up appointment for existing treatment" },
+    "emergency": { "duration": 30, "description": "Emergency dental treatment" },
+    "deep_cleaning": { "duration": 90, "description": "Deep cleaning/scaling" },
+    "filling": { "duration": 60, "description": "Dental filling procedure" },
+    "crown": { "duration": 120, "description": "Crown placement" },
+    "extraction": { "duration": 60, "description": "Tooth extraction" }
+  },
+  "time_slot_rules": {
+    "lunch_break": { "start": "12:00", "end": "13:00" },
+    "slot_interval": 15,
+    "max_advance_booking_days": 90,
+    "min_advance_booking_hours": 24,
+    "cancellation_deadline_hours": 24
+  },
+  "dentist_availability": {
+    "Dr. Sarah Chen": {
+      "specialties": ["general_dentistry", "cosmetic_dentistry"],
+      "schedule": {
+        "monday": ["08:00-17:00"],
+        "tuesday": ["08:00-17:00"],
+        "wednesday": ["08:00-13:00"],
+        "thursday": ["08:00-17:00"],
+        "friday": ["08:00-17:00"]
+      }
+    },
+    "Dr. Michael Rodriguez": {
+      "specialties": ["oral_surgery", "endodontics"],
+      "schedule": {
+        "monday": ["09:00-18:00"],
+        "tuesday": ["09:00-18:00"],
+        "wednesday": ["14:00-18:00"],
+        "thursday": ["09:00-18:00"],
+        "friday": ["09:00-15:00"]
+      }
+    }
+  },
+  "holidays_2025": [
+    "2025-01-01", "2025-07-04", "2025-09-01", "2025-11-27",
+    "2025-11-28", "2025-12-25", "2025-12-26"
+  ]
+}

@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DentFlow - Dental Scheduling Assistant</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            height: 90vh;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            display: flex;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 300px;
+            background: #f8f9fa;
+            border-right: 1px solid #e9ecef;
+            padding: 30px 20px;
+            overflow-y: auto;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            margin-bottom: 30px;
+            color: #495057;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: #667eea;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            color: white;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .logo h1 {
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .patient-info {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .patient-info h3 {
+            color: #495057;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #6c757d;
+            font-size: 14px;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        .btn:hover {
+            background: #5a67d8;
+        }
+
+        .btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+
+        .appointments-list {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .appointments-list h3 {
+            color: #495057;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+
+        .appointment-item {
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 4px solid #28a745;
+        }
+
+        .appointment-item.cancelled {
+            border-left-color: #dc3545;
+            opacity: 0.7;
+        }
+
+        .appointment-time {
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 5px;
+        }
+
+        .appointment-type {
+            color: #6c757d;
+            font-size: 14px;
+        }
+
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            padding: 20px 30px;
+            background: white;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chat-header h2 {
+            color: #495057;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            color: #28a745;
+            font-size: 14px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: #28a745;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 30px;
+            background: #fafbfc;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            display: flex;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            justify-content: flex-end;
+        }
+
+        .message.assistant {
+            justify-content: flex-start;
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 15px 20px;
+            border-radius: 18px;
+            position: relative;
+        }
+
+        .message.user .message-content {
+            background: #667eea;
+            color: white;
+            border-bottom-right-radius: 6px;
+        }
+
+        .message.assistant .message-content {
+            background: white;
+            color: #495057;
+            border-bottom-left-radius: 6px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .message-time {
+            font-size: 11px;
+            opacity: 0.7;
+            margin-top: 5px;
+        }
+
+        .message.user .message-time {
+            text-align: right;
+        }
+
+        .typing-indicator {
+            display: none;
+            padding: 15px 20px;
+            background: white;
+            border-radius: 18px;
+            border-bottom-left-radius: 6px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            max-width: 70%;
+        }
+
+        .typing-indicator.show {
+            display: inline-block;
+        }
+
+        .typing-dots {
+            display: flex;
+            align-items: center;
+        }
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background: #6c757d;
+            border-radius: 50%;
+            margin: 0 2px;
+            animation: typingDot 1.4s infinite;
+        }
+
+        .typing-dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes typingDot {
+            0%, 60%, 100% {
+                transform: translateY(0);
+            }
+            30% {
+                transform: translateY(-10px);
+            }
+        }
+
+        .input-container {
+            padding: 20px 30px;
+            background: white;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .input-form {
+            display: flex;
+            gap: 15px;
+        }
+
+        .message-input {
+            flex: 1;
+            padding: 15px 20px;
+            border: 1px solid #ced4da;
+            border-radius: 25px;
+            font-size: 15px;
+            resize: none;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .message-input:focus {
+            border-color: #667eea;
+        }
+
+        .send-button {
+            width: 50px;
+            height: 50px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        .send-button:hover {
+            background: #5a67d8;
+        }
+
+        .send-button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+
+        .schedule-update {
+            margin-top: 10px;
+            padding: 10px;
+            background: #e7f3ff;
+            border-radius: 8px;
+            border-left: 4px solid #0066cc;
+            font-size: 12px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            color: #333;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 10px;
+            color: #495057;
+        }
+
+        .empty-state p {
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+                height: 100vh;
+                max-width: 100%;
+                border-radius: 0;
+            }
+
+            .sidebar {
+                width: 100%;
+                height: auto;
+                border-right: none;
+                border-bottom: 1px solid #e9ecef;
+            }
+
+            .message-content {
+                max-width: 85%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <div class="logo">
+                <div class="logo-icon">🦷</div>
+                <h1>DentFlow</h1>
+            </div>
+
+            <div class="patient-info">
+                <h3>Patient Information</h3>
+                <div class="form-group">
+                    <label for="patientName">Your Name</label>
+                    <input type="text" id="patientName" placeholder="Enter your full name">
+                </div>
+                <div class="form-group">
+                    <label for="patientId">Patient ID (Optional)</label>
+                    <input type="text" id="patientId" placeholder="e.g., P001">
+                </div>
+                <button class="btn" onclick="setPatientInfo()">Set Patient Info</button>
+            </div>
+
+            <div class="appointments-list">
+                <h3>Your Upcoming Appointments</h3>
+                <div id="appointmentsList">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📅</div>
+                        <h3>No appointments found</h3>
+                        <p>Set your patient information to see upcoming appointments</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="chat-container">
+            <div class="chat-header">
+                <h2>Dental Scheduling Assistant</h2>
+                <div class="status-indicator">
+                    <div class="status-dot"></div>
+                    <span>Online</span>
+                </div>
+            </div>
+
+            <div class="messages-container" id="messagesContainer">
+                <div class="empty-state">
+                    <div class="empty-state-icon">💬</div>
+                    <h3>Welcome to DentFlow</h3>
+                    <p>I'm your dental scheduling assistant. You can ask me to:<br>
+                    • Confirm upcoming appointments<br>
+                    • Reschedule to a different time<br>
+                    • Cancel appointments<br>
+                    • Schedule new appointments</p>
+                </div>
+            </div>
+
+            <div class="typing-indicator" id="typingIndicator">
+                <div class="typing-dots">
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                </div>
+            </div>
+
+            <div class="input-container">
+                <form class="input-form" onsubmit="sendMessage(event)">
+                    <input
+                        type="text"
+                        class="message-input"
+                        id="messageInput"
+                        placeholder="Type your message here..."
+                        autocomplete="off"
+                    >
+                    <button type="submit" class="send-button" id="sendButton" disabled>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let conversationId = null;
+        let patientInfo = {
+            name: '',
+            id: ''
+        };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            checkHealth();
+            setupEventListeners();
+        });
+
+        function setupEventListeners() {
+            const messageInput = document.getElementById('messageInput');
+            const sendButton = document.getElementById('sendButton');
+
+            messageInput.addEventListener('input', function() {
+                sendButton.disabled = !this.value.trim();
+            });
+
+            messageInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage(e);
+                }
+            });
+        }
+
+        async function checkHealth() {
+            try {
+                const response = await fetch('/health');
+                const data = await response.json();
+
+                // console.log('Health data:', data);  // 调试用，可保留或删掉
+
+                if (!data.llm_configured) {
+                    showWarning('LLM is not configured. The assistant will use basic scheduling logic.');
+                } else {
+                    // 如果你实现了隐藏提示的函数，可以在这里关掉 warning
+                    if (typeof hideWarning === 'function') {
+                        hideWarning();
+                    }
+                }
+            } catch (error) {
+                console.error('Health check failed:', error);
+                showError('Unable to connect to the server. Please try again later.');
+            }
+        }
+
+        function setPatientInfo() {
+            const nameInput = document.getElementById('patientName');
+            const idInput = document.getElementById('patientId');
+
+            patientInfo.name = nameInput.value.trim();
+            patientInfo.id = idInput.value.trim();
+
+            if (patientInfo.name) {
+                loadAppointments();
+                showSuccess('Patient information set successfully!');
+
+                // Add welcome message
+                if (conversationId) {
+                    addMessage('assistant', `Hello ${patientInfo.name}! I can now help you with your appointments. What would you like to do today?`);
+                }
+            } else {
+                showError('Please enter your name');
+            }
+        }
+
+        async function loadAppointments() {
+            if (!patientInfo.id && !patientInfo.name) return;
+
+            try {
+                const url = patientInfo.id
+                    ? `/appointments?patient_id=${patientInfo.id}`
+                    : '/appointments';
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                displayAppointments(data.appointments);
+            } catch (error) {
+                console.error('Failed to load appointments:', error);
+            }
+        }
+
+        function displayAppointments(appointments) {
+            const container = document.getElementById('appointmentsList');
+
+            if (!appointments || appointments.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📅</div>
+                        <h3>No upcoming appointments</h3>
+                        <p>You don't have any appointments scheduled</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = appointments.map(appt => `
+                <div class="appointment-item ${appt.status === 'cancelled' ? 'cancelled' : ''}">
+                    <div class="appointment-time">${formatDateTime(appt.datetime)}</div>
+                    <div class="appointment-type">${appt.type.replace('_', ' ')} - ${appt.status}</div>
+                </div>
+            `).join('');
+        }
+
+        function formatDateTime(datetimeStr) {
+            const date = new Date(datetimeStr);
+            return date.toLocaleString('en-US', {
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+        }
+
+        async function sendMessage(event) {
+            event.preventDefault();
+
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+
+            if (!message) return;
+
+            // Clear input and disable send button
+            input.value = '';
+            document.getElementById('sendButton').disabled = true;
+
+            // Add user message to chat
+            addMessage('user', message);
+
+            // Show typing indicator
+            showTypingIndicator();
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        patient_id: patientInfo.id || null,
+                        patient_name: patientInfo.name || null,
+                        conversation_id: conversationId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Update conversation ID
+                    conversationId = data.conversation_id;
+
+                    // Hide typing indicator
+                    hideTypingIndicator();
+
+                    // Add assistant response
+                    let responseText = data.message;
+
+                    // Add schedule update if present
+                    if (data.schedule_update) {
+                        responseText += `<div class="schedule-update">Schedule Update: ${JSON.stringify(data.schedule_update, null, 2)}</div>`;
+                    }
+
+                    addMessage('assistant', responseText);
+
+                    // Refresh appointments if there was a schedule update
+                    if (data.schedule_update) {
+                        loadAppointments();
+                    }
+                } else {
+                    hideTypingIndicator();
+                    showError(data.detail || 'Failed to send message');
+                }
+            } catch (error) {
+                hideTypingIndicator();
+                console.error('Error sending message:', error);
+                showError('Network error. Please try again.');
+            }
+
+            // Re-enable send button
+            document.getElementById('sendButton').disabled = false;
+        }
+
+        function addMessage(role, content) {
+            const container = document.getElementById('messagesContainer');
+
+            // Remove empty state if this is the first message
+            const emptyState = container.querySelector('.empty-state');
+            if (emptyState) {
+                emptyState.remove();
+            }
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+
+            const messageContent = document.createElement('div');
+            messageContent.className = 'message-content';
+            messageContent.innerHTML = `
+                <div>${content}</div>
+                <div class="message-time">${formatTime(new Date())}</div>
+            `;
+
+            messageDiv.appendChild(messageContent);
+            container.appendChild(messageDiv);
+
+            // Scroll to bottom
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function showTypingIndicator() {
+            document.getElementById('typingIndicator').classList.add('show');
+            const container = document.getElementById('messagesContainer');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function hideTypingIndicator() {
+            document.getElementById('typingIndicator').classList.remove('show');
+        }
+
+        function formatTime(date) {
+            return date.toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+        }
+
+        function showSuccess(message) {
+            // Simple success notification
+            console.log('Success:', message);
+        }
+
+        function showError(message) {
+            // Simple error notification
+            addMessage('assistant', `⚠️ Error: ${message}`);
+        }
+
+        function showWarning(message) {
+            // Simple warning notification
+            addMessage('assistant', `⚠️ Warning: ${message}`);
+        }
+    </script>
+</body>
+</html>

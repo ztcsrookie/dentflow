@@ -1,0 +1,28 @@
+{
+  "id": "scenario_B",
+  "name": "Appointment Rescheduling",
+  "description": "Patient wants to reschedule from Tuesday morning to Thursday afternoon",
+  "patient_message": "I can't make it on Tuesday morning. Can I do Thursday afternoon?",
+  "patient_id": "P001",
+  "patient_name": "Alice Brown",
+  "expected_status": "pending",
+  "expected_response_keywords": ["reschedule", "Thursday", "afternoon", "alternative", "options"],
+  "setup_data": {
+    "ensure_appointment_exists": {
+      "patient_id": "P001",
+      "datetime": "2025-01-21T10:00:00",
+      "type": "regular_checkup",
+      "status": "scheduled"
+    },
+    "ensure_availability": {
+      "date": "2025-01-23",
+      "slots": ["14:00", "16:30"]
+    }
+  },
+  "success_criteria": {
+    "response_contains_keywords": true,
+    "schedule_update_status": "pending",
+    "offers_alternatives": true,
+    "mentions_thursday": true
+  }
+}
