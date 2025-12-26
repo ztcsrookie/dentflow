@@ -154,7 +154,8 @@ DentFlow/
 ├── data/
 │   ├── patients.json           # Patient records
 │   ├── appointments.json       # Appointment schedule
-│   └── availability.json       # Clinic availability rules
+│   ├── availability.json       # Clinic availability rules
+│   └── conversations.json      # Conversation history (auto-generated)
 │
 ├── scenarios/
 │   ├── scenario_A.txt          # Simple confirmation test
@@ -163,8 +164,19 @@ DentFlow/
 │   └── benchmark_runner.py     # Test execution script
 │
 └── tests/
-    └── test_agent.py           # Automated test suite
+    ├── test_agent.py           # Automated test suite
+    └── test_persistence_queries.py # Persistence/query checks
 ```
+
+## Data Storage
+
+DentFlow uses JSON files for persistence (no external database required):
+
+- `data/patients.json` stores patient records
+- `data/appointments.json` stores appointment records
+- `data/conversations.json` stores chat history for retrieval by conversation ID
+
+Writes are atomic (temp file + rename) to reduce corruption risk.
 
 ## Patient Management
 
@@ -205,19 +217,56 @@ When the server is running, these endpoints are available:
 ### Chat and Scheduling
 - `GET /` - Web chat interface
 - `POST /chat` - Send messages to the scheduling agent
-- `GET /appointments` - View current appointment schedule
+- `GET /appointments` - View appointment schedule (supports filters)
+- `POST /appointments` - Create a new appointment
 - `GET /health` - Health check endpoint
 
 ### Patient Management
 - `POST /register-patient` - Register a new patient
 - `POST /find-patient` - Find patient by name, phone, or email
-- `GET /patients` - View all patients
+- `GET /patients` - View patients (supports filters)
 - `GET /conversation/{conversation_id}` - Get conversation history
+- `GET /conversations` - List conversations (supports filters)
 
 ### Appointment Management
 - `POST /appointment/{appointment_id}/confirm` - Confirm an appointment
 - `POST /appointment/{appointment_id}/cancel` - Cancel an appointment
 - `GET /availability` - Get available time slots for a specific date
+
+### Query Parameters (Filters)
+
+**Appointments**
+- `patient_id`, `patient_name`, `status`
+- `date_from`, `date_to` (YYYY-MM-DD or ISO datetime)
+- `keyword` (matches notes, dentist, patient_name)
+
+**Patients**
+- `patient_id`, `name`, `phone`, `email`
+
+**Conversations**
+- `patient_id`, `patient_name`
+- `date_from`, `date_to` (YYYY-MM-DD or ISO datetime)
+- `keyword` (matches message content)
+
+### Example Requests
+
+```bash
+# Create a patient
+curl -X POST http://127.0.0.1:8000/register-patient \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Jane Roe","phone":"+1-555-222-3333","email":"jane.roe@email.com","date_of_birth":"1990-02-02"}'
+
+# Create an appointment
+curl -X POST http://127.0.0.1:8000/appointments \
+  -H 'Content-Type: application/json' \
+  -d '{"patient_name":"Jane Roe","datetime":"2025-12-10T10:00:00","type":"regular_checkup","notes":"Initial visit"}'
+
+# Query appointments by date range
+curl "http://127.0.0.1:8000/appointments?date_from=2025-12-01&date_to=2025-12-31"
+
+# Fetch conversation history
+curl "http://127.0.0.1:8000/conversation/conv_1234567890"
+```
 
 ## Configuration Notes
 
@@ -326,6 +375,13 @@ We currently have openings on Thursday at 14:00 or 16:30. Which one would you pr
    ```bash
    # Either stop the other process or use a different port
    uvicorn app.server:app --port 8080
+   ```
+
+4. **Invalid Date Format in Query Filters:**
+   ```bash
+   # Use YYYY-MM-DD or full ISO datetime
+   /appointments?date_from=2025-12-01
+   /appointments?date_from=2025-12-01T09:00:00
    ```
 
 ## Development

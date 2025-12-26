@@ -88,6 +88,37 @@ class PatientRepository:
             print(f"Error loading appointments: {e}")
         return []
 
+    def _save_appointments(self, appointments: List[Appointment]) -> None:
+        """Save appointments to JSON file."""
+        try:
+            self.data_dir.mkdir(exist_ok=True)
+            data = {"appointments": [appt.dict() for appt in appointments]}
+            temp_file = self.appointments_file.with_suffix('.tmp')
+            with open(temp_file, 'w') as f:
+                json.dump(data, f, indent=2, default=str)
+            temp_file.rename(self.appointments_file)
+        except Exception as e:
+            print(f"Error saving appointments: {e}")
+            raise
+
+    def get_all_appointments(self) -> List[Appointment]:
+        """Get all appointments."""
+        return self._load_appointments()
+
+    def add_or_update_appointment(self, appointment: Appointment) -> Appointment:
+        """Add a new appointment or update an existing one by ID."""
+        appointments = self._load_appointments()
+        updated = False
+        for idx, appt in enumerate(appointments):
+            if appt.id == appointment.id:
+                appointments[idx] = appointment
+                updated = True
+                break
+        if not updated:
+            appointments.append(appointment)
+        self._save_appointments(appointments)
+        return appointment
+
     def find_patient_by_identifiers(self, name: Optional[str] = None,
                                   phone: Optional[str] = None,
                                   email: Optional[str] = None,

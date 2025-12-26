@@ -1,7 +1,7 @@
 import os
 import re
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from typing import Dict, List, Optional, Any, Tuple
 from pathlib import Path
 
@@ -19,8 +19,8 @@ from openai import OpenAI
 load_dotenv()
 
 from .scheduling.models import (
-    ChatRequest, ChatResponse, ScheduleUpdate, AppointmentStatus,
-    Appointment, Patient, PatientRegistrationRequest
+    ChatRequest, ChatResponse, ScheduleUpdate, AppointmentStatus, AppointmentType,
+    Appointment, AppointmentCreateRequest, Patient, PatientRegistrationRequest
 )
 from .scheduling.logic import SchedulingLogic
 from .scheduling.patient_repository import PatientRepository, PatientLookupResult
@@ -42,8 +42,9 @@ templates = Jinja2Templates(directory="app/ui")
 scheduler = SchedulingLogic()
 patient_repo = PatientRepository()
 
-# File path for persisting appointments used by PatientRepository
+# File paths for persistence
 APPOINTMENTS_FILE = Path("data") / "appointments.json"
+CONVERSATIONS_FILE = Path("data") / "conversations.json"
 
 
 def persist_appointment_from_schedule_update(
@@ -51,42 +52,63 @@ def persist_appointment_from_schedule_update(
     update: "ScheduleUpdate",
 ) -> None:
     """
-    根据 ScheduleUpdate 和当前识别的 patient，把新预约写入 appointments.json。
-    这样重启之后 PatientRepository 就能从文件中读到这条预约。
+    根据 ScheduleUpdate 和当前识别的 patient，把预约变化写入 appointments.json。
+    兼容新建、取消、确认、改期场景。
     """
     try:
-        new_appt_dt = update.new_appointment
-        if not new_appt_dt:
-            print("[DEBUG] persist_appointment_from_schedule_update: no new_appointment, skipping")
-            return
+        appointments = patient_repo.get_all_appointments()
 
-        # 统一成 ISO 字符串
-        if isinstance(new_appt_dt, datetime):
-            new_dt_str = new_appt_dt.isoformat()
-        else:
-            new_dt_str = str(new_appt_dt)
+        patient_id = patient.id if patient is not None else None
+        patient_name = patient.name if patient is not None else update.patient_name
+
+        def _to_datetime(value: Any) -> Optional[datetime]:
+            if value is None:
+                return None
+            if isinstance(value, datetime):
+                return value
+            return datetime.fromisoformat(str(value))
+
+        def _match_patient(appt: Appointment) -> bool:
+            if patient_id and appt.patient_id == patient_id:
+                return True
+            if patient_name and appt.patient_name == patient_name:
+                return True
+            return False
 
         status = update.status
-        # Enum → 字符串
         if isinstance(status, AppointmentStatus):
-            status_str = status.value
+            status_value = status.value
         else:
-            status_str = str(status)
+            status_value = str(status)
 
-        # 读取已有 appointments
-        appointments: List[Dict[str, Any]] = []
-        if APPOINTMENTS_FILE.exists():
-            try:
-                with open(APPOINTMENTS_FILE, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    appointments = data.get("appointments", [])
-            except Exception as e:
-                print(f"[DEBUG] Error reading existing appointments file: {e}")
+        original_dt = _to_datetime(update.original_appointment)
+        new_dt = _to_datetime(update.new_appointment)
 
-        # 生成新的 id：A001, A002, ...
+        target_appt = None
+        if original_dt:
+            for appt in appointments:
+                if _match_patient(appt) and appt.datetime == original_dt:
+                    target_appt = appt
+                    break
+
+        if target_appt:
+            target_appt.status = AppointmentStatus(status_value)
+            if new_dt:
+                target_appt.datetime = new_dt
+            if update.notes:
+                target_appt.notes = update.notes
+            patient_repo.add_or_update_appointment(target_appt)
+            scheduler.reload_appointments()
+            print(f"[DEBUG] Updated appointment {target_appt.id} for patient {patient_name}")
+            return
+
+        if not new_dt:
+            print("[DEBUG] persist_appointment_from_schedule_update: no new_appointment and no match, skipping")
+            return
+
         max_id_num = 0
         for appt in appointments:
-            appt_id = appt.get("id")
+            appt_id = appt.id
             if isinstance(appt_id, str) and appt_id.startswith("A"):
                 try:
                     n = int(appt_id[1:])
@@ -95,11 +117,6 @@ def persist_appointment_from_schedule_update(
                     continue
         new_id = f"A{max_id_num + 1:03d}"
 
-        # 病人信息
-        patient_id = patient.id if patient is not None else None
-        patient_name = patient.name if patient is not None else update.patient_name
-
-        # 从 notes 粗略猜类型 & 时长
         notes = update.notes or ""
         appt_type = "regular_checkup"
         notes_lower = notes.lower()
@@ -112,28 +129,22 @@ def persist_appointment_from_schedule_update(
         if "90" in notes or "一个半小时" in notes:
             duration = 90
 
-        # 先写死一个牙医名字
         dentist = "Dr. Sarah Chen"
 
-        new_appt = {
-            "id": new_id,
-            "patient_id": patient_id,
-            "patient_name": patient_name,
-            "datetime": new_dt_str,
-            "duration": duration,
-            "type": appt_type,
-            "status": status_str,
-            "notes": notes or "Scheduled via chat assistant",
-            "dentist": dentist,
-        }
+        new_appt = Appointment(
+            id=new_id,
+            patient_id=patient_id or "UNKNOWN",
+            patient_name=patient_name or "Unknown Patient",
+            datetime=new_dt,
+            duration=duration,
+            type=AppointmentType(appt_type),
+            status=AppointmentStatus(status_value),
+            notes=notes or "Scheduled via chat assistant",
+            dentist=dentist,
+        )
 
-        appointments.append(new_appt)
-
-        APPOINTMENTS_FILE.parent.mkdir(exist_ok=True)
-        tmp_path = APPOINTMENTS_FILE.with_suffix(".tmp")
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            json.dump({"appointments": appointments}, f, indent=2, ensure_ascii=False)
-        tmp_path.replace(APPOINTMENTS_FILE)
+        patient_repo.add_or_update_appointment(new_appt)
+        scheduler.reload_appointments()
         print(f"[DEBUG] Persisted new appointment {new_id} for patient {patient_name} to {APPOINTMENTS_FILE}")
     except Exception as e:
         print(f"[DEBUG] Error persisting appointment from schedule_update: {e}")
@@ -178,9 +189,69 @@ except Exception as e:
     print(f"Warning: Could not load system prompt: {e}")
     SYSTEM_PROMPT = "You are a dental clinic scheduling assistant."
 
+def load_conversations_from_file() -> Tuple[Dict[str, List[Dict]], Dict[str, Dict[str, Any]]]:
+    """Load conversations from disk for basic persistence."""
+    conversations_data: Dict[str, List[Dict]] = {}
+    meta_data: Dict[str, Dict[str, Any]] = {}
+    if not CONVERSATIONS_FILE.exists():
+        return conversations_data, meta_data
+    try:
+        with open(CONVERSATIONS_FILE, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+        for item in raw.get("conversations", []):
+            conv_id = item.get("conversation_id")
+            if not conv_id:
+                continue
+            conversations_data[conv_id] = item.get("messages", [])
+            meta_data[conv_id] = {
+                "patient_id": item.get("patient_id"),
+                "patient_name": item.get("patient_name"),
+            }
+    except Exception as e:
+        print(f"[DEBUG] Error loading conversations file: {e}")
+    return conversations_data, meta_data
+
+
+def save_conversations_to_file() -> None:
+    """Persist in-memory conversations to disk."""
+    try:
+        CONVERSATIONS_FILE.parent.mkdir(exist_ok=True)
+        payload = {"conversations": []}
+        for conv_id, messages in conversations.items():
+            meta = conversation_meta.get(conv_id, {})
+            payload["conversations"].append({
+                "conversation_id": conv_id,
+                "patient_id": meta.get("patient_id"),
+                "patient_name": meta.get("patient_name"),
+                "messages": messages,
+            })
+        temp_file = CONVERSATIONS_FILE.with_suffix(".tmp")
+        with open(temp_file, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2, ensure_ascii=False)
+        temp_file.replace(CONVERSATIONS_FILE)
+    except Exception as e:
+        print(f"[DEBUG] Error saving conversations file: {e}")
+
+
+def record_conversation_exchange(conversation_id: str, user_text: str, assistant_text: str) -> None:
+    """Append a user/assistant exchange to the conversation history and persist."""
+    user_message = {
+        "role": "user",
+        "content": user_text,
+        "timestamp": datetime.now().isoformat(),
+    }
+    assistant_message = {
+        "role": "assistant",
+        "content": assistant_text,
+        "timestamp": datetime.now().isoformat(),
+    }
+    conversations[conversation_id].append(user_message)
+    conversations[conversation_id].append(assistant_message)
+    save_conversations_to_file()
+
+
 # Global conversation storage (in production, use a proper database)
-conversations: Dict[str, List[Dict]] = {}
-conversation_meta: Dict[str, Dict[str, Any]] = {}
+conversations, conversation_meta = load_conversations_from_file()
 
 
 class ConversationMessage(BaseModel):
@@ -314,6 +385,27 @@ def parse_patient_info_from_message(text: str) -> Dict[str, Any]:
         "insurance_info": None,
     }
 
+    def try_fill_from_tokens(tokens: List[str]) -> None:
+        """Best-effort extraction when user sends comma/space-separated info."""
+        remaining = []
+        for token in tokens:
+            if not token:
+                continue
+            if not data["email"] and re.search(r"[A-Za-z0-9_.+-]+@[A-Za-z0-9_.-]+", token):
+                data["email"] = token
+                continue
+            if not data["date_of_birth"] and re.search(r"\d{4}-\d{2}-\d{2}", token):
+                data["date_of_birth"] = token
+                continue
+            if not data["phone"]:
+                digits = re.sub(r"\D", "", token)
+                if len(digits) >= 7:
+                    data["phone"] = digits
+                    continue
+            remaining.append(token)
+        if not data["name"] and remaining:
+            data["name"] = remaining[0]
+
     # 尝试解析姓名（如“我叫老张”、“我的名字是老张”、“姓名：老张”）
     name_match = re.search(r"(我叫|我的名字是|姓名[:：]?)\s*([^\s，。,]+)", text)
     if name_match:
@@ -344,6 +436,13 @@ def parse_patient_info_from_message(text: str) -> Dict[str, Any]:
     insurance_match = re.search(r"(保险|insurance)[是:： ]*([^\n，。]+)", text, re.IGNORECASE)
     if insurance_match:
         data["insurance_info"] = insurance_match.group(2).strip()
+
+    # 兜底：按逗号/空白分隔的字段（如“老张，18888888888，cs@126.com，2000-01-01”）
+    if not (data["name"] and data["phone"] and data["email"] and data["date_of_birth"]):
+        tokens = re.split(r"[，,;\n]+", text)
+        tokens = [t.strip() for t in tokens if t.strip()]
+        if len(tokens) >= 2:
+            try_fill_from_tokens(tokens)
 
     return data
 
@@ -465,7 +564,7 @@ async def chat_endpoint(chat_request: ChatRequest):
     try:
         print(f"[DEBUG] Starting chat endpoint with message: {chat_request.message}")
 
-                # Get or create conversation ID
+        # Get or create conversation ID
         conversation_id = chat_request.conversation_id or f"conv_{datetime.now().timestamp()}"
         print(f"[DEBUG] Conversation ID: {conversation_id}")
 
@@ -502,6 +601,7 @@ async def chat_endpoint(chat_request: ChatRequest):
                         "我在检查你提供的信息时遇到了一些问题。\n"
                         "请确认包含：姓名、电话、邮箱、生日(YYYY-MM-DD)，然后再发送一次。"
                     )
+                    record_conversation_exchange(conversation_id, chat_request.message, response_text)
                     return ChatResponse(
                         message=response_text,
                         conversation_id=conversation_id,
@@ -515,6 +615,7 @@ async def chat_endpoint(chat_request: ChatRequest):
                         + "\n\n请重新发送一次，可以按照下面格式：\n"
                           "姓名、电话、邮箱、生日(YYYY-MM-DD)、保险信息（可选）。"
                     )
+                    record_conversation_exchange(conversation_id, chat_request.message, response_text)
                     return ChatResponse(
                         message=response_text,
                         conversation_id=conversation_id,
@@ -539,6 +640,7 @@ async def chat_endpoint(chat_request: ChatRequest):
                         f"好的，{patient.name}，我已经帮你在系统里注册好了。\n"
                         "接下来你想预约什么样的牙科服务？"
                     )
+                    record_conversation_exchange(conversation_id, chat_request.message, response_text)
                     return ChatResponse(
                         message=response_text,
                         conversation_id=conversation_id,
@@ -549,6 +651,7 @@ async def chat_endpoint(chat_request: ChatRequest):
                     response_text = (
                         "在创建你的病人信息时出了点问题，请稍后再试，或者直接联系诊所前台。"
                     )
+                    record_conversation_exchange(conversation_id, chat_request.message, response_text)
                     return ChatResponse(
                         message=response_text,
                         conversation_id=conversation_id,
@@ -567,6 +670,84 @@ async def chat_endpoint(chat_request: ChatRequest):
             if parsed_info.get("email") and not chat_request.patient_email:
                 chat_request.patient_email = parsed_info["email"]
             # date_of_birth 先不写入 ChatRequest（模型里可能没有这个字段），在注册模式下再用
+
+            # 如果一次性提供了完整注册信息，直接注册并持久化，避免依赖对话模式/会话保持
+            if all([
+                parsed_info.get("name"),
+                parsed_info.get("phone"),
+                parsed_info.get("email"),
+                parsed_info.get("date_of_birth"),
+            ]):
+                try:
+                    is_valid, errors = patient_repo.validate_patient_data(parsed_info)
+                except Exception as e:
+                    print(f"[DEBUG] Error in validate_patient_data: {e}")
+                    response_text = (
+                        "我在检查你提供的信息时遇到了一些问题。\n"
+                        "请确认包含：姓名、电话、邮箱、生日(YYYY-MM-DD)，然后再发送一次。"
+                    )
+                    record_conversation_exchange(conversation_id, chat_request.message, response_text)
+                    return ChatResponse(
+                        message=response_text,
+                        conversation_id=conversation_id,
+                        timestamp=datetime.now()
+                    )
+
+                if not is_valid:
+                    response_text = (
+                        "谢谢！我收到了你提供的一部分信息，但有一些问题：\n"
+                        + "\n".join(f"- {err}" for err in errors)
+                        + "\n\n请重新发送一次，可以按照下面格式：\n"
+                          "姓名、电话、邮箱、生日(YYYY-MM-DD)、保险信息（可选）。"
+                    )
+                    record_conversation_exchange(conversation_id, chat_request.message, response_text)
+                    return ChatResponse(
+                        message=response_text,
+                        conversation_id=conversation_id,
+                        timestamp=datetime.now()
+                    )
+
+                lookup_result = patient_repo.find_patient_by_identifiers(
+                    name=parsed_info["name"],
+                    phone=parsed_info["phone"],
+                    email=parsed_info["email"]
+                )
+                if lookup_result.is_new_patient:
+                    try:
+                        date_of_birth = datetime.fromisoformat(parsed_info["date_of_birth"]).date()
+                        patient = patient_repo.create_patient(
+                            name=parsed_info["name"],
+                            phone=parsed_info["phone"],
+                            email=parsed_info["email"],
+                            date_of_birth=date_of_birth,
+                            insurance_info=parsed_info.get("insurance_info"),
+                            notes=None
+                        )
+                        meta["patient_id"] = patient.id
+                        meta["patient_name"] = patient.name
+                        meta["mode"] = None
+
+                        response_text = (
+                            f"好的，{patient.name}，我已经帮你在系统里注册好了。\n"
+                            "接下来你想预约什么样的牙科服务？"
+                        )
+                        record_conversation_exchange(conversation_id, chat_request.message, response_text)
+                        return ChatResponse(
+                            message=response_text,
+                            conversation_id=conversation_id,
+                            timestamp=datetime.now()
+                        )
+                    except Exception as e:
+                        print(f"[DEBUG] Error while creating patient from parsed info: {e}")
+                        response_text = (
+                            "在创建你的病人信息时出了点问题，请稍后再试，或者直接联系诊所前台。"
+                        )
+                        record_conversation_exchange(conversation_id, chat_request.message, response_text)
+                        return ChatResponse(
+                            message=response_text,
+                            conversation_id=conversation_id,
+                            timestamp=datetime.now()
+                        )
 
         # Identify patient and check for special handling
         print(f"[DEBUG] Calling get_or_identify_patient...")
@@ -590,6 +771,7 @@ async def chat_endpoint(chat_request: ChatRequest):
                     "4. Your date of birth (YYYY-MM-DD)\n"
                     "5. Your insurance information (if applicable)"
                 )
+                record_conversation_exchange(conversation_id, chat_request.message, response_text)
                 return ChatResponse(
                     message=response_text,
                     conversation_id=conversation_id,
@@ -615,6 +797,7 @@ async def chat_endpoint(chat_request: ChatRequest):
                         f"{patient_list}\n\n"
                         "Could you please provide your patient ID or additional information to help me find the correct record?"
                     )
+                    record_conversation_exchange(conversation_id, chat_request.message, response_text)
                     return ChatResponse(
                         message=response_text,
                         conversation_id=conversation_id,
@@ -624,6 +807,7 @@ async def chat_endpoint(chat_request: ChatRequest):
             elif special_action.startswith("validation_error"):
                 error_msg = special_action.replace("validation_error: ", "")
                 response_text = f"There are some issues with the information provided: {error_msg}. Please correct these and try again."
+                record_conversation_exchange(conversation_id, chat_request.message, response_text)
                 return ChatResponse(
                     message=response_text,
                     conversation_id=conversation_id,
@@ -633,11 +817,17 @@ async def chat_endpoint(chat_request: ChatRequest):
             elif special_action.startswith("registration_error"):
                 error_msg = special_action.replace("registration_error: ", "")
                 response_text = f"I encountered an error while creating your patient record: {error_msg}. Please try again or contact the clinic."
+                record_conversation_exchange(conversation_id, chat_request.message, response_text)
                 return ChatResponse(
                     message=response_text,
                     conversation_id=conversation_id,
                     timestamp=datetime.now()
                 )
+
+        # Persist identified patient context for later queries
+        if patient:
+            conversation_meta[conversation_id]["patient_id"] = patient.id
+            conversation_meta[conversation_id]["patient_name"] = patient.name
 
         # Get patient context if we have a patient
         patient_context = get_patient_context(patient) if patient else None
@@ -700,14 +890,14 @@ async def chat_endpoint(chat_request: ChatRequest):
         else:
             print(f"[DEBUG] No schedule update data to process")
 
-        # 如果有 ScheduleUpdate，且包含新的预约时间，并且状态是 scheduled/confirmed，
-        # 则把这条预约写入 appointments.json
-        if schedule_update and schedule_update.new_appointment:
+        # Persist any schedule updates for consistency
+        if schedule_update:
             try:
-                if schedule_update.status in (AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED):
-                    persist_appointment_from_schedule_update(patient, schedule_update)
+                persist_appointment_from_schedule_update(patient, schedule_update)
             except Exception as e:
                 print(f"[DEBUG] Error persisting appointment from schedule_update in chat_endpoint: {e}")
+
+        save_conversations_to_file()
 
         response = ChatResponse(
             message=ai_response_text,
@@ -724,19 +914,53 @@ async def chat_endpoint(chat_request: ChatRequest):
 
 
 @app.get("/appointments")
-async def get_appointments(patient_id: Optional[str] = None):
-    """Get current appointments, optionally filtered by patient."""
+async def get_appointments(
+    patient_id: Optional[str] = None,
+    patient_name: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    keyword: Optional[str] = None,
+    status: Optional[str] = None,
+):
+    """Get appointments with optional filters."""
     try:
+        def _parse_date(value: Optional[str], default_time: time) -> Optional[datetime]:
+            if not value:
+                return None
+            if len(value) == 10:
+                return datetime.combine(datetime.fromisoformat(value).date(), default_time)
+            return datetime.fromisoformat(value)
+
+        start_dt = _parse_date(date_from, time.min)
+        end_dt = _parse_date(date_to, time.max)
+
+        appointments = patient_repo.get_all_appointments()
+
         if patient_id:
-            appointments = scheduler.get_appointments_for_patient(patient_id)
-        else:
-            appointments = scheduler.get_upcoming_appointments()
+            appointments = [appt for appt in appointments if appt.patient_id == patient_id]
+        if patient_name:
+            appointments = [appt for appt in appointments if appt.patient_name == patient_name]
+        if status:
+            appointments = [appt for appt in appointments if appt.status.value == status]
+        if start_dt:
+            appointments = [appt for appt in appointments if appt.datetime >= start_dt]
+        if end_dt:
+            appointments = [appt for appt in appointments if appt.datetime <= end_dt]
+        if keyword:
+            keyword_lower = keyword.lower()
+            appointments = [
+                appt for appt in appointments
+                if keyword_lower in (appt.notes or "").lower()
+                or keyword_lower in appt.patient_name.lower()
+                or keyword_lower in (appt.dentist or "").lower()
+            ]
 
         return {
             "appointments": [
                 {
                     "id": appt.id,
                     "patient_name": appt.patient_name,
+                    "patient_id": appt.patient_id,
                     "datetime": appt.datetime.isoformat(),
                     "type": appt.type.value,
                     "status": appt.status.value,
@@ -747,15 +971,104 @@ async def get_appointments(patient_id: Optional[str] = None):
                 for appt in appointments
             ]
         }
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD or ISO datetime.")
     except Exception as e:
         print(f"Error getting appointments: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve appointments")
 
 
-@app.get("/patients")
-async def get_patients():
-    """Get all patients."""
+@app.post("/appointments")
+async def create_appointment(appointment_data: AppointmentCreateRequest):
+    """Create a new appointment for an existing patient."""
     try:
+        patient = None
+        if appointment_data.patient_id:
+            patient = scheduler.find_patient_by_id(appointment_data.patient_id)
+        if not patient and appointment_data.patient_name:
+            patient = scheduler.find_patient_by_name(appointment_data.patient_name)
+
+        if not patient:
+            raise HTTPException(status_code=404, detail="Patient not found")
+
+        appointment_dt = datetime.fromisoformat(appointment_data.datetime)
+
+        duration = appointment_data.duration
+        if not duration and scheduler.availability:
+            appt_info = scheduler.availability.appointment_types.get(appointment_data.type)
+            if appt_info:
+                duration = appt_info.duration
+        if not duration:
+            duration = 60
+
+        existing = patient_repo.get_all_appointments()
+        max_id_num = 0
+        for appt in existing:
+            appt_id = appt.id
+            if isinstance(appt_id, str) and appt_id.startswith("A"):
+                try:
+                    max_id_num = max(max_id_num, int(appt_id[1:]))
+                except ValueError:
+                    continue
+        new_id = f"A{max_id_num + 1:03d}"
+
+        appointment = Appointment(
+            id=new_id,
+            patient_id=patient.id,
+            patient_name=patient.name,
+            datetime=appointment_dt,
+            duration=duration,
+            type=appointment_data.type,
+            status=AppointmentStatus.SCHEDULED,
+            notes=appointment_data.notes,
+            dentist=appointment_data.dentist,
+        )
+
+        patient_repo.add_or_update_appointment(appointment)
+        scheduler.reload_appointments()
+
+        return {
+            "message": "Appointment created successfully",
+            "appointment": {
+                "id": appointment.id,
+                "patient_id": appointment.patient_id,
+                "patient_name": appointment.patient_name,
+                "datetime": appointment.datetime.isoformat(),
+                "type": appointment.type.value,
+                "status": appointment.status.value,
+                "duration": appointment.duration,
+                "dentist": appointment.dentist,
+                "notes": appointment.notes,
+            },
+        }
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid datetime format. Use ISO datetime.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error creating appointment: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create appointment")
+
+
+@app.get("/patients")
+async def get_patients(
+    patient_id: Optional[str] = None,
+    name: Optional[str] = None,
+    phone: Optional[str] = None,
+    email: Optional[str] = None,
+):
+    """Get all patients, with optional filters."""
+    try:
+        patients = patient_repo.get_all_patients()
+        if patient_id:
+            patients = [p for p in patients if p.id == patient_id]
+        if name:
+            patients = [p for p in patients if p.name == name]
+        if phone:
+            patients = [p for p in patients if p.phone == phone]
+        if email:
+            patients = [p for p in patients if p.email == email]
+
         return {
             "patients": [
                 {
@@ -766,7 +1079,7 @@ async def get_patients():
                     "insurance_info": patient.insurance_info,
                     "notes": patient.notes
                 }
-                for patient in scheduler.patients.values()
+                for patient in patients
             ]
         }
     except Exception as e:
@@ -781,8 +1094,6 @@ async def get_availability(date_str: str):
         target_date = datetime.fromisoformat(date_str).date()
 
         # Get available slots for different appointment types
-        from scheduling.models import AppointmentType
-
         availability = {}
         for appt_type in [AppointmentType.REGULAR_CHECKUP, AppointmentType.INITIAL_CONSULTATION]:
             slots = scheduler.find_available_slots(target_date, appt_type)
@@ -811,6 +1122,10 @@ async def get_conversation(conversation_id: str):
     """Get conversation history."""
     try:
         if conversation_id not in conversations:
+            file_conversations, file_meta = load_conversations_from_file()
+            conversations.update(file_conversations)
+            conversation_meta.update(file_meta)
+        if conversation_id not in conversations:
             raise HTTPException(status_code=404, detail="Conversation not found")
 
         return {
@@ -820,6 +1135,68 @@ async def get_conversation(conversation_id: str):
     except Exception as e:
         print(f"Error getting conversation: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve conversation")
+
+
+@app.get("/conversations")
+async def list_conversations(
+    patient_id: Optional[str] = None,
+    patient_name: Optional[str] = None,
+    keyword: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+):
+    """List conversations with optional filters."""
+    try:
+        def _parse_date(value: Optional[str], default_time: time) -> Optional[datetime]:
+            if not value:
+                return None
+            if len(value) == 10:
+                return datetime.combine(datetime.fromisoformat(value).date(), default_time)
+            return datetime.fromisoformat(value)
+
+        start_dt = _parse_date(date_from, time.min)
+        end_dt = _parse_date(date_to, time.max)
+
+        file_conversations, file_meta = load_conversations_from_file()
+        results = []
+        for conv_id, messages in file_conversations.items():
+            meta = file_meta.get(conv_id, {})
+            if patient_id and meta.get("patient_id") != patient_id:
+                continue
+            if patient_name and meta.get("patient_name") != patient_name:
+                continue
+            if keyword:
+                keyword_lower = keyword.lower()
+                if not any(keyword_lower in (msg.get("content") or "").lower() for msg in messages):
+                    continue
+            if start_dt or end_dt:
+                timestamps = [
+                    datetime.fromisoformat(msg["timestamp"])
+                    for msg in messages
+                    if msg.get("timestamp")
+                ]
+                if timestamps:
+                    min_ts = min(timestamps)
+                    max_ts = max(timestamps)
+                    if start_dt and max_ts < start_dt:
+                        continue
+                    if end_dt and min_ts > end_dt:
+                        continue
+
+            results.append({
+                "conversation_id": conv_id,
+                "patient_id": meta.get("patient_id"),
+                "patient_name": meta.get("patient_name"),
+                "message_count": len(messages),
+                "last_message_at": messages[-1]["timestamp"] if messages else None,
+            })
+
+        return {"conversations": results}
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD or ISO datetime.")
+    except Exception as e:
+        print(f"Error listing conversations: {e}")
+        raise HTTPException(status_code=500, detail="Failed to list conversations")
 
 
 

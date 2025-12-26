@@ -69,6 +69,16 @@ class Appointment(BaseModel):
         }
 
 
+class AppointmentCreateRequest(BaseModel):
+    patient_id: Optional[str] = None
+    patient_name: Optional[str] = None
+    datetime: str
+    duration: Optional[int] = None
+    type: AppointmentType
+    notes: Optional[str] = None
+    dentist: Optional[str] = None
+
+
 class ScheduleUpdate(BaseModel):
     patient_name: Optional[str] = None
     status: AppointmentStatus
@@ -187,6 +197,7 @@ class BenchmarkScenario(BaseModel):
     expected_status: Optional[AppointmentStatus] = None
     expected_response_keywords: List[str] = []
     setup_data: Optional[Dict[str, Any]] = None
+    success_criteria: Optional[Dict[str, Any]] = None
 
 
 class BenchmarkResult(BaseModel):

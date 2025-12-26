@@ -36,16 +36,7 @@ class SchedulingLogic:
                         self.patients[patient.id] = patient
 
             # Load appointments
-            appointments_file = self.data_dir / "appointments.json"
-            if appointments_file.exists():
-                with open(appointments_file, 'r') as f:
-                    appointments_data = json.load(f)
-                    for appt_data in appointments_data.get("appointments", []):
-                        # Convert string datetime to datetime object
-                        if isinstance(appt_data["datetime"], str):
-                            appt_data["datetime"] = datetime.fromisoformat(appt_data["datetime"])
-                        appointment = Appointment(**appt_data)
-                        self.appointments[appointment.id] = appointment
+            self.appointments = self._load_appointments_from_file()
 
             # Load availability
             availability_file = self.data_dir / "availability.json"
@@ -59,6 +50,27 @@ class SchedulingLogic:
 
         except Exception as e:
             print(f"Error loading data: {e}")
+
+    def _load_appointments_from_file(self) -> Dict[str, Appointment]:
+        """Load appointments from JSON file into a dict keyed by ID."""
+        appointments: Dict[str, Appointment] = {}
+        appointments_file = self.data_dir / "appointments.json"
+        if appointments_file.exists():
+            with open(appointments_file, 'r') as f:
+                appointments_data = json.load(f)
+                for appt_data in appointments_data.get("appointments", []):
+                    if isinstance(appt_data["datetime"], str):
+                        appt_data["datetime"] = datetime.fromisoformat(appt_data["datetime"])
+                    appointment = Appointment(**appt_data)
+                    appointments[appointment.id] = appointment
+        return appointments
+
+    def reload_appointments(self) -> None:
+        """Reload appointments from disk to keep in-memory state consistent."""
+        try:
+            self.appointments = self._load_appointments_from_file()
+        except Exception as e:
+            print(f"Error reloading appointments: {e}")
 
     def save_data(self):
         """Save current state to JSON files."""
@@ -90,21 +102,24 @@ class SchedulingLogic:
 
     def get_appointments_for_patient(self, patient_id: str) -> List[Appointment]:
         """Get all appointments for a specific patient."""
-        return [appt for appt in self.appointments.values() if appt.patient_id == patient_id]
+        patient = self.find_patient_by_id(patient_id)
+        if not patient:
+            return []
+        return self.patient_repo.get_patient_appointments(patient)
 
     def get_upcoming_appointments(self, patient_id: Optional[str] = None) -> List[Appointment]:
         """Get upcoming appointments, optionally filtered by patient."""
         if patient_id:
-            # Use repository for patient-specific appointments
             patient = self.find_patient_by_id(patient_id)
             if patient:
                 return self.patient_repo.get_upcoming_appointments(patient)
             return []
 
-        # For all patients, use the original logic
         now = datetime.now()
-        appointments = [appt for appt in self.appointments.values()
-                       if appt.datetime > now and appt.status in [AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED]]
+        appointments = [
+            appt for appt in self.patient_repo.get_all_appointments()
+            if appt.datetime > now and appt.status in [AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED]
+        ]
 
         return sorted(appointments, key=lambda x: x.datetime)
 

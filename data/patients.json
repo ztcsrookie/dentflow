@@ -53,6 +53,15 @@
       "date_of_birth": "1985-06-15",
       "insurance_info": "HealthCare Plus",
       "notes": "First time patient, referred by friend"
+    },
+    {
+      "id": "P007",
+      "name": "\u8001\u5f20",
+      "phone": "18888888888",
+      "email": "cs@126.com",
+      "date_of_birth": "2000-01-01",
+      "insurance_info": null,
+      "notes": null
     }
   ]
 }
