@@ -1,59 +1,47 @@
-{
-  "appointments": [
-    {
-      "id": "A001",
-      "patient_id": "P001",
-      "patient_name": "Alice Brown",
-      "datetime": "2025-12-12 10:00:00",
-      "duration": 60,
-      "type": "regular_checkup",
-      "status": "confirmed",
-      "notes": "Routine cleaning and examination",
-      "dentist": "Dr. Sarah Chen"
-    },
-    {
-      "id": "A002",
-      "patient_id": "P002",
-      "patient_name": "Bob Smith",
-      "datetime": "2025-12-15 14:00:00",
-      "duration": 90,
-      "type": "initial_consultation",
-      "status": "scheduled",
-      "notes": "New patient consultation and x-rays",
-      "dentist": "Dr. Michael Rodriguez"
-    },
-    {
-      "id": "A003",
-      "patient_id": "P003",
-      "patient_name": "Carol Johnson",
-      "datetime": "2025-12-18 09:00:00",
-      "duration": 60,
-      "type": "regular_checkup",
-      "status": "cancelled",
-      "notes": "Routine cleaning",
-      "dentist": "Dr. Sarah Chen"
-    },
-    {
-      "id": "A004",
-      "patient_id": "P004",
-      "patient_name": "David Wilson",
-      "datetime": "2025-12-20 15:00:00",
-      "duration": 45,
-      "type": "follow_up",
-      "status": "scheduled",
-      "notes": "Follow-up for previous treatment",
-      "dentist": "Dr. Michael Rodriguez"
-    },
-    {
-      "id": "A005",
-      "patient_id": "P005",
-      "patient_name": "Emma Davis",
-      "datetime": "2025-12-22 11:30:00",
-      "duration": 60,
-      "type": "regular_checkup",
-      "status": "scheduled",
-      "notes": "Routine checkup before semester starts",
-      "dentist": "Dr. Sarah Chen"
-    }
-  ]
-}
+[
+  {
+    "name": "\u8001\u5f20",
+    "dob": "1992-01-01",
+    "year": 2025,
+    "month": 12,
+    "day": 27,
+    "start_time": "14:00",
+    "end_time": "15:00"
+  },
+  {
+    "name": "\u8001\u738b",
+    "dob": "1985-03-20",
+    "year": 2025,
+    "month": 12,
+    "day": 27,
+    "start_time": "09:00",
+    "end_time": "10:00"
+  },
+  {
+    "name": "\u8001\u5bbf",
+    "dob": "1990-05-15",
+    "year": 2025,
+    "month": 12,
+    "day": 29,
+    "start_time": "10:00",
+    "end_time": "11:00"
+  },
+  {
+    "name": "Tom Zhang",
+    "dob": "1991-01-01",
+    "year": 2025,
+    "month": 12,
+    "day": 29,
+    "start_time": "11:00",
+    "end_time": "12:00"
+  },
+  {
+    "name": "\u8001\u5f20",
+    "dob": "1993-01-01",
+    "year": 2026,
+    "month": 1,
+    "day": 5,
+    "start_time": "10:00",
+    "end_time": "11:00"
+  }
+]

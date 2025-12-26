@@ -1,67 +1,37 @@
-{
-  "patients": [
-    {
-      "id": "P001",
-      "name": "Alice Brown",
-      "phone": "+1-555-0101",
-      "email": "alice.brown@email.com",
-      "date_of_birth": "1985-03-15",
-      "insurance_info": "DentalCare Plus",
-      "notes": "Prefers morning appointments, allergic to latex"
-    },
-    {
-      "id": "P002",
-      "name": "Bob Smith",
-      "phone": "+1-555-0102",
-      "email": "bob.smith@email.com",
-      "date_of_birth": "1992-07-22",
-      "insurance_info": "SmileHealth PPO",
-      "notes": "New patient, needs initial consultation"
-    },
-    {
-      "id": "P003",
-      "name": "Carol Johnson",
-      "phone": "+1-555-0103",
-      "email": "carol.johnson@email.com",
-      "date_of_birth": "1988-11-08",
-      "insurance_info": "DentalCare Plus",
-      "notes": "Regular patient, due for cleaning"
-    },
-    {
-      "id": "P004",
-      "name": "David Wilson",
-      "phone": "+1-555-0104",
-      "email": "david.wilson@email.com",
-      "date_of_birth": "1975-05-30",
-      "insurance_info": "Guardian Dental",
-      "notes": "Has dental anxiety, prefers afternoon appointments"
-    },
-    {
-      "id": "P005",
-      "name": "Emma Davis",
-      "phone": "+1-555-0105",
-      "email": "emma.davis@email.com",
-      "date_of_birth": "1995-09-12",
-      "insurance_info": "SmileHealth PPO",
-      "notes": "Student, flexible schedule"
-    },
-    {
-      "id": "P006",
-      "name": "John Doe",
-      "phone": "+1-555-555-0123",
-      "email": "john.doe@email.com",
-      "date_of_birth": "1985-06-15",
-      "insurance_info": "HealthCare Plus",
-      "notes": "First time patient, referred by friend"
-    },
-    {
-      "id": "P007",
-      "name": "\u8001\u5f20",
-      "phone": "18888888888",
-      "email": "cs@126.com",
-      "date_of_birth": "2000-01-01",
-      "insurance_info": null,
-      "notes": null
-    }
-  ]
-}
+[
+  {
+    "name": "\u8001\u5f20",
+    "dob": "1992-01-01",
+    "email": "zt@12q.com",
+    "phone": "18888889999",
+    "patient_id": "JCW6HBWK54"
+  },
+  {
+    "name": "\u8001\u738b",
+    "dob": "1985-03-20",
+    "email": "laowang@66.com",
+    "phone": "18888889990",
+    "patient_id": "ZU2W9H0PQ7"
+  },
+  {
+    "name": "Tom",
+    "dob": "1991-01-01",
+    "email": "tom@11.com",
+    "phone": "18888887777",
+    "patient_id": "C2Y6XLFTI0"
+  },
+  {
+    "name": "Tom Zhang",
+    "dob": "1991-01-01",
+    "email": "tom@11.com",
+    "phone": "18888887777",
+    "patient_id": "IANA5FFH41"
+  },
+  {
+    "name": "\u8001\u5f20",
+    "dob": "1993-01-01",
+    "email": "laozhang@111.com",
+    "phone": "17777778888",
+    "patient_id": "642H4WYDGD"
+  }
+]
